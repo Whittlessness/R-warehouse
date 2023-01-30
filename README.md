@@ -12,7 +12,7 @@ An example of using R and Python for data analysis and problem solving.
 
 ![](https://github.com/Whittlessness/R-warehouse/blob/main/images/plot_energy.jpg)
 
-## Project #2: Video streamer algorithm analysis; strenghts and weakenesses of current test
+## [Project #2: Video streamer algorithm analysis; strenghts and weakenesses of current test](https://github.com/Whittlessness/R-warehouse/blob/main/WNW%20report.Rmd)
 * Create a report of current algorithm effectiveness
 * Look for data disparity 
 * Assess current A/B test and look for improvements
