@@ -19,4 +19,4 @@ An example of using R and Python for data analysis and problem solving.
 * Establish own Hypothesis Tests 
 * Correct sample sizes for A/B test 
 * Complete single & mutiple regressions models 
-* Conclude on results affirm on the theory recommend improving tbe process. 
+* Conclude on results, affirm on the theory and recommend improving the process by reducing the Margin of Error. 
