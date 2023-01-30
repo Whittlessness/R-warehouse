@@ -20,3 +20,5 @@ An example of using R and Python for data analysis and problem solving.
 * Correct sample sizes for A/B test 
 * Complete single & mutiple regressions models 
 * Conclude on results, affirm on the theory and recommend improving the process by reducing the Margin of Error. 
+
+![](https://github.com/Whittlessness/R-warehouse/blob/main/correlation%20matrix.jpg)
