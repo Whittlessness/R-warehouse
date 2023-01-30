@@ -10,4 +10,6 @@ An example of using R and Python for data analysis and problem solving.
 * Used the z.score method to search for outliers 
 * Plotted by sector with analysis into specific narratives, infereing on results with special consideration to outside influencers
 
+![](https://github.com/Whittlessness/R-warehouse/blob/main/images/plot_energy.jpg)
+
 ## Project #2: 
