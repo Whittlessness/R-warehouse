@@ -1,7 +1,7 @@
 # Data Science Portfolio
 An example of using R and Python for data analysis and problem solving. 
 
-## Project #1: Three decades of Australian Climate Neglect by Sector
+## [Project #1: Three decades of Australian Climate Neglect by Sector](https://github.com/Whittlessness/R-warehouse/blob/main/Three%20decades%20of%20Australian%20Climate%20Neglect%20by%20Sector.Rmd)
 * Sourced a global database on CO2 emisions per sector for every country in the world with available data. 
 * Cleaned data through factorisation with base R code, String manipulation with Stringr and renaming and dropping empty variables with DPYLR
 * Manipulated the dataset to tidy Principles with TIDYR
