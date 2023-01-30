@@ -1,0 +1,1017 @@
+---
+title: "Why Not Watch algorithm analysis"
+subtitle: "Strengths and weaknesses of current test "
+author: "Luke Whitmore"
+date: "Last updated: `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  slidy_presentation:
+    font_adjustment: 0
+    highlight: haddock
+    mathjax: "default"
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+# Use this chunk to quietly load your pacakges
+
+knitr::opts_chunk$set(
+	fig.align = "center",
+	message = FALSE,
+	warning = FALSE
+)
+# Packages loaded in this chunk will not appear in the presentation. 
+
+library(ggplot2)
+library(dplyr)
+library(knitr) 
+library(readr)
+library(magrittr)
+library(plyr)
+library(tibble)
+library(tidyr)
+library(stringr)
+library(MASS) 
+library(VGAM)
+library(car)
+library(pwr)      
+library(purrr) 
+library(corrplot)
+library(lubridate)
+
+#read-in
+stream_data <- read_csv("data/streaming_data.csv")
+
+# Subsets
+before <- stream_data[1:548,]
+after <- stream_data[549:1000,]
+a_after <- after %>% 
+  filter(group == "A")
+b_after <- after %>% 
+  filter(group == "B")
+
+#constants
+pop_mu <- mean(stream_data$hours_watched)
+pop_sd <- sd(stream_data$hours_watched)
+pop_var <- var(stream_data$hours_watched)
+pop_n <- nrow(stream_data)
+
+aft_b_mu <- mean(b_after$hours_watched)
+aft_a_mu <- mean(a_after$hours_watched)
+
+#visualisations 
+gg_clust <- ggplot()+
+  geom_point(position = position_jitter(width = 0.45,
+                                                 height = 0.45), 
+                      aes(x = stream_data$age,
+                          y = stream_data$demographic,
+                          colour = factor(stream_data$group))) +
+  labs(title="Natural Clustered Showing of Current A/B Test Inaddecuacy",  x = 'Age (years)', y = 'deographic',
+                colour = 'Group')
+
+gg_scat <- ggplot()+
+  geom_point(position = position_jitter(width = 0.45,
+                                                 height = 0.45), 
+                      aes(x = after$age,
+                          y = after$hours_watched,
+                          colour = factor(after$group))) +
+  labs(x = 'age', y = 'hours watched',
+                colour = 'Group')
+
+
+
+# correlation Matrix 
+number_treat <- b_after %>% 
+  mutate(gender = as.factor(gender)) %>% 
+  mutate(gender = as.numeric(gender)) %>% 
+  mutate(group = as.factor(group)) %>% 
+  mutate(group = as.numeric(group)) %>% 
+  mutate(date = as.factor(date)) %>% 
+  mutate(date = as.numeric(date)) %>% 
+  dplyr::select(gender, group, date, age, social_metric, time_since_signup, demographic, hours_watched)
+
+# sample size correction 
+
+alpha <- 0.05
+sigma <- pop_sd
+E <- 0.05 #high success rate MoE is very low 
+z <- qnorm(alpha/2, lower.tail = FALSE) # z-score -//based on demographic which are normally distributed 
+
+young_female <- stream_data %>% 
+  filter(demographic == "1") %>%  
+  nrow()
+young_male <- stream_data %>% 
+  filter(demographic == "2") %>% 
+  nrow()
+old_female <- stream_data %>% 
+  filter(demographic == "3") %>% 
+  nrow()
+old_male <- stream_data %>% 
+  filter(demographic == "4") %>% 
+  nrow()
+
+sample_calc_df <- data.frame(young_female, young_male, old_female, old_male)
+
+sample_calc_df %<>% pivot_longer(cols = 1:4,
+                                 values_to = "count")
+
+samp_size <- function(z, E, sigma) {  
+  out <- ((z * sigma) / E)^2  
+  out 
+} 
+
+n <- samp_size(z, E, sigma)
+
+n <- ceiling(n)
+# total need data as by observation count 
+sample_calc_df %<>% mutate(proportion = count/sum(count)) 
+
+min_prop <- sample_calc_df %>% 
+  filter(proportion == min(proportion)) %>%
+  pull(proportion)
+
+n_tot <- n/min_prop
+
+sample_calc_df %<>% mutate(sample = ceiling(proportion * n_tot)) 
+revised_n_tot <- sum(sample_calc_df$sample)
+#min sample size needed for equal representation
+p_2 <- 0.216 + 0.268 #younder demo
+p_1 <- 0.213 + 0.303 #older demo
+alpha <- 0.0125
+output <- pwr.p.test(h = ES.h(p1 = p_1, p2 = p_2),n = ,sig.level = alpha,
+                   power = 0.80,alternative = "greater")
+min_n <- ceiling(output[[2]])
+
+# more visualisations 
+gg_pie <- ggplot(sample_calc_df, aes(x="", y=proportion, fill = name))+
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar("y", start=0)+
+  theme_void()
+```
+
+
+# Introduction
+Here at Why Not Watch there has been a change to the algorithm that recommends content.  Upon looking into the initial study and effect it has been determined that more information is needed for better results, although initial indicators are showing promise. 
+
+Key points:
+
+- Size of data needs to be increased 
+- Gender bias needs to be addressed  
+- Slight age bias could be adjusted
+- Treatment and Control groups need adjusting in both the above
+
+
+# Problem Statement
+
+The questions to ask are: 
+
+- "Will a change to the algorithm improve business prospects?"
+- "Is there enough data on hand to calculate a positive return?"
+
+
+
+# Data
+
+Data determining properties: 
+
+- Dependent variable: Hours Watched 
+- Independent variables: Age & Social Metric 
+- Multicollinearity & Natural Cluster: Demographic
+- Test Bias: Gender & Age
+- A/B test: Date
+
+**Variable scale**
+
+- Numeric Scale: Hours Watched 
+
+**Preprocess**
+
+- Subsetting and Factorisation
+
+
+
+# Analysis
+
+Plot 1
+```{r fig.width = 12, fig.height = 6}
+qplot(stream_data$gender)
+```
+
+# Plot 2
+```{r fig.width = 12, fig.height = 5.75}
+gg <- ggplot(stream_data, aes(x=gender, y=hours_watched))+
+  geom_boxplot(outlier.color = "red")+
+  labs(title = "Hours Watched by Gender", x= "Gender", y= "Hours Watched")
+gg
+```
+
+# Plot 3
+```{r fig.width = 12, fig.height = 6}
+#treatment and control after 18th July
+qplot(b_after$gender)
+```
+
+# Plot 4
+```{r fig.width = 12, fig.height = 6}
+qplot(a_after$gender)
+```
+
+# Hypothesis testing
+
+
+*First Hypothesis*
+$$H_0: \overline{x}_m = \mu$$
+$$H_A: \overline{x}_m \ne \mu$$
+*Second Hypothesis* 
+$$H_0: \overline{x}_f = \mu$$
+$$H_A: \overline{x}_f \ne \mu$$
+
+# Calculations 
+
+```{r}
+male_sub <- stream_data %>% 
+  filter(gender == "M") 
+female_sub <- stream_data %>% 
+  filter(gender == "F")
+male_stats <- summarise(male_sub,
+                        mean = mean(hours_watched, na.rm = TRUE),
+                        sd = sd(hours_watched, na.rm = TRUE),
+                        n = nrow(male_sub))
+female_stats <- summarise(female_sub,
+                          mean = mean(hours_watched),
+                          sd = sd(hours_watched),
+                          n = nrow(female_sub))
+male_z_stat <- (pop_mu - male_stats$mean) /
+  sqrt(pop_sd^2 / pop_n + male_stats$sd / male_stats$n)
+female_z_stat <- (pop_mu - female_stats$mean) /
+  sqrt(pop_sd^2 / pop_n + female_stats$sd / female_stats$n)
+m_p_val <- pnorm(abs(male_z_stat),0,1, lower.tail = FALSE)
+f_p_val <- pnorm(abs(female_z_stat),0,1, lower.tail = FALSE)
+cat(paste0("Male Hours Watched P-value: ", round(m_p_val, 2), " Female Hours Watched P-value: ", round(f_p_val, 2), " at a 5% percent sig lvl both pass Pop mean likeliness assumptions"))
+```
+# Final Gender disparity Plots 1
+```{r, fig.width = 12, fig.height = 6}
+gg <- ggplot(stream_data, aes(x = age, fill = gender))+ 
+  geom_histogram(alpha = 0.5, position = "identity", binwidth = 1)
+gg
+```
+
+# 2
+
+```{r, fig.width = 10, fig.height = 2.75}
+qplot(stream_data$age, stream_data$hours_watched,
+      colour = stream_data$gender)
+gg_pie
+```
+
+# Positive start
+
+```{r fig.width = 12, fig.height = 6}
+gg_clust
+```
+
+# Positive scatter plot
+
+```{r fig.width = 9, fig.height = 4.5}
+gg_scat
+cat(paste0("Treatment group mean Hours Watched:  ", round(aft_b_mu,2), " Control group mean Hours Watched ", round(aft_a_mu,2), " Improvement of: ", round(aft_b_mu - aft_a_mu, 2), " Hours Watched."))
+```
+
+# Current Test result effects 
+
+```{r fig.width = 12, fig.height = 6}
+qplot(after$group)
+```
+
+# Correlation Matrix
+
+```{r fig.width = 12, fig.height = 6}
+M = cor(number_treat)
+corrplot(M, method = "number")
+```
+
+# Mutiple Regression Summary 
+```{r}
+reg_model_treat <- lm(hours_watched ~ social_metric + age, data = b_after)
+summary(reg_model_treat)
+```
+
+# Residual check 
+```{r fig.width = 6, fig.height = 2.75}
+b_after$model <- reg_model_treat$coefficients[1] + 
+                       reg_model_treat$coefficients[2]*b_after$social_metric +
+                       reg_model_treat$coefficients[3]*b_after$age 
+b_after$residual <- b_after$hours_watched - b_after$model
+qplot(b_after$social_metric,b_after$residual)
+qplot(b_after$age,b_after$residual)
+```
+
+# Sample Size Correction 
+
+
+```{r}
+sample_calc_df
+print(n)
+cat(paste0("Total collective data needed to return results with a 5% Margin of Error: ", revised_n_tot))
+print(paste('Min sample size', min_n))
+```
+
+
+
+# Discussion
+
+**Major Findings**
+
+- Gender Bias 
+- Algorithm effectiveness
+
+**Strengths & Limitations**
+
+- Age: useful 
+- Variable diversity: Limiting
+- Sample size: Limiting 
+
+**Proposals**
+
+- Sample more users 13,000 to be safe 
+- If Possible extrapolate more from metadata
+
+**Conclusion**
+
+- More information
+- Equal representation 
+- Change test timing
+- Improve current A/B test 
+
+
+# END
+
+
+
+
+
+```{r fig.width = 7, fig.height = 3.5}
+qplot(stream_data$hours_watched)
+```
+
+
+
+```{r data check }
+knitr::kable(head(stream_data, 20))
+```
+
+
+
+
+```{r analysis 1, fig.width = 7, fig.height = 3.5}
+qplot(stream_data$time_since_signup, stream_data$hours_watched)
+
+qplot(stream_data$social_metric, stream_data$hours_watched)
+
+qplot(stream_data$age, stream_data$hours_watched,
+      colour = stream_data$gender)
+
+qplot(stream_data$gender)
+
+qplot(stream_data$age)
+
+gg <- ggplot(stream_data, aes(x = age, fill = gender))+
+  geom_histogram(alpha = 0.5, position = "identity", binwidth = 1)
+gg
+
+qplot(stream_data$demographic)
+
+qplot(stream_data$social_metric)
+
+qplot(stream_data$hours_watched)
+ #####################################################################
+
+qplot(stream_data$age, stream_data$hours_watched,
+      colour = stream_data$social_metric)
+
+gg <- ggplot()+
+  geom_point(aes(x = stream_data$age,
+                 y = stream_data$social_metric)) +
+  # scale_y_continuous(breaks = int_breaks_rounded)+
+  labs(x = "Age (years)", y = "social metric")
+gg
+
+
+# int_breaks_rounded <- function(x, n = 10) pretty(x, n)[round(pretty(x, n), 1) %% 1 == 0]
+
+gg <- ggplot()+
+  geom_point(aes(x = stream_data$age,
+                 y = stream_data$demographic)) +
+  # scale_y_continuous(breaks = int_breaks_rounded)+
+  labs(x = "Age (years)", y = "demographic")
+gg
+
+
+gg <- ggplot()+
+  geom_point(position = position_jitter(width = 0.45,
+                                                 height = 0.45),
+                      aes(x = stream_data$age,
+                          y = stream_data$demographic,
+                          colour = factor(stream_data$group))) +
+  labs(x = 'Age (years)', y = 'deographic',
+                colour = 'Group')
+gg
+
+gg <- ggplot()+
+  geom_point(position = position_jitter(width = 0.45,
+                                                 height = 0.45),
+                      aes(x = stream_data$age,
+                          y = stream_data$demographic,
+                          colour = factor(stream_data$gender))) +
+  labs(x = 'Age (years)', y = 'deographic',
+                colour = 'Group')
+gg
+```
+
+
+
+
+```{r fig.width = 7, fig.height = 3.5}
+check_a_df <- stream_data %>%
+filter(group == "A")
+
+check_b_df <- stream_data %>%
+filter(group == "B")
+n_total_a <- sum(stream_data$group == "A")
+n_total_b <- sum(stream_data$group == "B")
+
+```
+ 
+
+```{r}
+gg <- ggplot(check_b_df, aes(x = age, fill = gender))+
+  geom_histogram(alpha = 0.5, position = "identity", binwidth = 1)
+gg
+
+gg <- ggplot(check_a_df, aes(x = age, fill = gender))+
+  geom_histogram(alpha = 0.5, position = "identity", binwidth = 1)
+gg
+
+gg <- ggplot(check_b_df, aes(x = hours_watched, fill = gender))+
+  geom_histogram(alpha = 0.5, position = "identity", binwidth = 1)
+gg
+
+gg <- ggplot(check_a_df, aes(x = hours_watched, fill = gender))+
+  geom_histogram(alpha = 0.5, position = "identity", binwidth = 1)
+gg
+
+qplot(check_b_df$gender)
+
+qplot(check_a_df$gender)
+
+
+
+```
+
+#after the 18th of July
+```{r}
+before <- stream_data[1:548,]
+after <- stream_data[549:1000,]
+```
+
+```{r stats}
+before_stats <- summarise(before,
+                          mean = mean(hours_watched),
+                          sd = sd(hours_watched),
+                          n = nrow(before))
+
+before_stats
+after_stats <- summarise(after,
+                         mean = mean(hours_watched),
+                         sd = sd(hours_watched),
+                         n = nrow(after))
+after_stats
+
+after_group_a <- after %>%
+  filter(group == "A")
+after_group_b <- after %>%
+  filter(group == "B")
+
+after_a_stats <- summarise(after_group_a,
+                           mean = mean(hours_watched),
+                           sd = sd(hours_watched),
+                           n = nrow(after_group_a))
+after_b_stats <- summarise(after_group_b,
+                           mean = mean(hours_watched),
+                           sd = sd(hours_watched),
+                           n = nrow(after_group_b))
+after_a_stats
+after_b_stats
+```
+
+```{r fig.width = 7, fig.height = 3.5}
+
+qplot(before$gender)
+qplot(after$gender)
+
+a_after <- after %>%
+  filter(group == "A")
+b_after <- after %>%
+  filter(group == "B")
+
+qplot(a_after$gender)
+qplot(b_after$gender)
+
+qplot(after$group)
+```
+
+```{r fig.width = 7, fig.height = 3.5}
+gg <- ggplot()+
+  geom_point(position = position_jitter(width = 0.45,
+                                                 height = 0.45),
+                      aes(x = after$age,
+                          y = after$demographic,
+                          colour = factor(after$group))) +
+  labs(x = 'Age (years)', y = 'deographic',
+                colour = 'Group')
+gg
+
+gg <- ggplot()+
+  geom_point(position = position_jitter(width = 0.45,
+                                                 height = 0.45),
+                      aes(x = after$social_metric,
+                          y = after$hours_watched,
+                          colour = factor(after$group))) +
+  labs(x = 'social metric', y = 'Hours Watched',
+                colour = 'Group')
+gg
+
+gg <- ggplot()+
+  geom_point(position = position_jitter(width = 0.45,
+                                                 height = 0.45),
+                      aes(x = after$age,
+                          y = after$hours_watched,
+                          colour = factor(after$group))) +
+  labs(x = 'age', y = 'hours watched',
+                colour = 'Group')
+gg
+
+```
+
+```{r fig.width = 7, fig.height = 3.5}
+gg <- ggplot()+
+  geom_line(after_group_a, mapping=aes(x = age, y = hours_watched, color = "Group A"))+
+  geom_line(after_group_b, mapping=aes(x = age, y = hours_watched, color = "Group B"))
+gg
+```
+
+# Hypothesis testing
+
+
+*First Hypothesis*
+$$H_0: \overline{x}_m = \mu$$
+$$H_A: \overline{x}_m \ne \mu$$
+*Second Hypothesis* 
+$$H_0: \overline{x}_f = \mu$$
+$$H_A: \overline{x}_f \ne \mu$$
+Given the gender imbalance within the treated and target groups of the original A/B test a hypothesis test needs to be conducted to determine if there is good reason to include more men based on the amount of hours watched. To note there is a slight gender imbalance within the population already.  571 Males to 429 Females have been recorded.
+
+Both Hypothesis tests compare the mean hours watched of the entire population to each sampled male and female mean with a significance level of 5%. The p-value of M & F have returned (0.32) & (0.28) respectively indicating that both the Null hypotheses cannot be rejected.  Proving that the initial gender bias is not warranted and needs to be amended for broader constructive returns.
+
+Further more when analysing the statistics of each demographic, ordered into four categories consisting of gender and two bracketed age groups (18 - 35) & (36 - 55), it has been determined that similar tests should also be conducted for insight. 
+
+*First Hypothesis*
+$$H_0: \overline{x}_y = \mu $$
+$$H_A: \overline{x}_y \ne \mu$$
+*Second Hypothesis*
+$$H_0: \overline{x}_o = \mu $$
+$$H_A: \overline{x}_o \ne \mu$$
+In both cases the Null Hypothesis has been rejected both p-values are very small numbers (1.522714e-27) & (1.694221e-24) concluding that the demographic means do not meet the required 5% significance level in probability indicating not a close correlation with the population mean. 
+The Alternative hypothesis is true.
+
+```{r}
+pop_mu <- mean(stream_data$hours_watched)
+pop_sd <- sd(stream_data$hours_watched)
+pop_var <- var(stream_data$hours_watched)
+pop_n <- nrow(stream_data)
+
+male_sub <- stream_data %>% 
+  filter(gender == "M") 
+
+female_sub <- stream_data %>% 
+  filter(gender == "F")
+
+male_stats <- summarise(male_sub,
+                        mean = mean(hours_watched, na.rm = TRUE),
+                        sd = sd(hours_watched, na.rm = TRUE),
+                        n = nrow(male_sub)) 
+  
+female_stats <- summarise(female_sub,
+                          mean = mean(hours_watched),
+                          sd = sd(hours_watched),
+                          n = nrow(female_sub))
+
+male_z_stat <- (pop_mu - male_stats$mean) /
+  sqrt(pop_sd^2 / pop_n + male_stats$sd / male_stats$n)
+
+female_z_stat <- (pop_mu - female_stats$mean) /
+  sqrt(pop_sd^2 / pop_n + female_stats$sd / female_stats$n)
+
+m_p_val <- pnorm(abs(male_z_stat),0,1, lower.tail = FALSE)
+round(m_p_val, 2)
+
+f_p_val <- pnorm(abs(female_z_stat),0,1, lower.tail = FALSE)
+round(f_p_val, 2)
+```
+Demographic hypothesis test
+this could easily be an ANOVA test... but I am not comparing the means of each demographic to each other moreover each demographic to the pop mean so it may not be the right thing to use after all. they are all normally distributed.  
+
+```{r}
+pop_mu <- mean(stream_data$hours_watched)
+pop_sd <- sd(stream_data$hours_watched)
+pop_var <- var(stream_data$hours_watched)
+pop_n <- nrow(stream_data)
+
+dem_1 <- stream_data %>%
+  filter(demographic == "1")
+dem_2 <- stream_data %>%
+  filter(demographic == "2")
+dem_3 <- stream_data %>%
+  filter(demographic == "3")
+dem_4<- stream_data %>%
+  filter(demographic == "4")
+
+young_dem <- full_join(dem_1, dem_2)
+
+old_dem <- full_join(dem_3, dem_4)
+
+young_stats <- summarise(young_dem,
+                        mean = mean(hours_watched, na.rm = TRUE),
+                        sd = sd(hours_watched, na.rm = TRUE),
+                        n = nrow(young_dem))
+old_stats <- summarise(old_dem,
+                        mean = mean(hours_watched, na.rm = TRUE),
+                        sd = sd(hours_watched, na.rm = TRUE),
+                        n = nrow(old_dem))
+
+young_z_stat <- (pop_mu - young_stats$mean) /
+  sqrt(pop_sd^2 / pop_n + young_stats$sd / young_stats$n)
+old_z_stat <- (pop_mu - old_stats$mean) /
+  sqrt(pop_sd^2 / pop_n + old_stats$sd / old_stats$n)
+
+y_p_val <- pnorm(abs(young_z_stat),0,1, lower.tail = FALSE)
+o_p_val <- pnorm(abs(old_z_stat),0,1, lower.tail = FALSE)
+
+y_p_val
+o_p_val
+
+```
+
+# control group Hypothesis test 
+there is a gender imbalance within the treatment group for after the launch of the recommender system. Conducting a Hypothesis tests in relation to gender based on hours watched within the control group will determine if there is a reason to.
+
+```{r}
+cont_pop_mu <- mean(after_group_a$hours_watched)
+cont_pop_sd <- sd(after_group_a$hours_watched)
+cont_pop_var <- var(after_group_a$hours_watched)
+cont_pop_n <- nrow(after_group_a)
+
+cont_male_sub <- after_group_a %>% 
+  filter(gender == "M") 
+
+cont_female_sub <- after_group_a %>% 
+  filter(gender == "F")
+
+male_stats_cont <- summarise(cont_male_sub,
+                        mean = mean(hours_watched, na.rm = TRUE),
+                        sd = sd(hours_watched, na.rm = TRUE),
+                        n = nrow(male_sub)) 
+  
+female_stats_cont <- summarise(cont_female_sub,
+                          mean = mean(hours_watched),
+                          sd = sd(hours_watched),
+                          n = nrow(female_sub))
+
+cont_male_z_stat <- (cont_pop_mu - male_stats_cont$mean) /
+  sqrt(cont_pop_sd^2 / cont_pop_n + male_stats_cont$sd / male_stats_cont$n)
+
+cont_female_z_stat <- (cont_pop_mu - female_stats_cont$mean) /
+  sqrt(cont_pop_sd^2 / cont_pop_n + female_stats_cont$sd / female_stats_cont$n)
+
+cont_m_p_val <- pnorm(abs(cont_male_z_stat),0,1, lower.tail = FALSE)
+round(m_p_val, 2)
+
+cont_f_p_val <- pnorm(abs(cont_female_z_stat),0,1, lower.tail = FALSE)
+round(f_p_val, 2)
+```
+Criterion 3 
+
+regression analysis 
+#included 
+The dependent variable is Hours watched, the two dependent variables with a relationship to the dependent variable are Social Metric (only slightly) and age. 
+
+The higher social metrics returned the highest figures of hours watched. 
+The younger the age the more hours are watched.
+
+Social metric has a positive correlation and age has a negative correlation. 
+
+#excluded 
+Gender does not play a part, because as was determined earlier has a close likeliness to the population mean. 
+time since sign up has no effect the distribution is uniform. 
+
+Demographic is a collective categorical variable of gender and age 
+
+Group's need to be disregarded because they are biased 
+
+# results
+The return is a close to zero p-value, showing that there is a close relationship between hours watched and the social metric / age. 
+R^2 isn't as high as some might like but given earlier analysis this is probably because of the social metric. 
+
+Although after a quick SLR look in it can be determined that by making this a MLR the social metric does improve the p-value only slightly and in fact helps the R^2 value. 
+
+
+```{r mutiple regression}
+reg_model <- lm(hours_watched ~ social_metric + age, data = stream_data)
+summary(reg_model)
+```
+
+
+correlation check
+```{r fig.width = 7, fig.height = 3.5}
+number_df <- stream_data %>% 
+  mutate(gender = as.factor(gender)) %>% 
+  mutate(gender = as.numeric(gender)) %>% 
+  mutate(group = as.factor(group)) %>% 
+  mutate(group = as.numeric(group)) %>% 
+  mutate(date = as.factor(date)) %>% 
+  mutate(date = as.numeric(date)) %>% 
+  dplyr::select(gender, group, date, age, social_metric, time_since_signup, demographic, hours_watched)
+
+M = cor(number_df)
+corrplot(M, method = "number")
+
+number_after <- after %>% 
+  mutate(gender = as.factor(gender)) %>% 
+  mutate(gender = as.numeric(gender)) %>% 
+  mutate(group = as.factor(group)) %>% 
+  mutate(group = as.numeric(group)) %>% 
+  mutate(date = as.factor(date)) %>% 
+  mutate(date = as.numeric(date)) %>% 
+  dplyr::select(gender, group, date, age, social_metric, time_since_signup, demographic, hours_watched)
+
+M = cor(number_after)
+corrplot(M, method = "number")
+
+number_before <- before %>% 
+  mutate(gender = as.factor(gender)) %>% 
+  mutate(gender = as.numeric(gender)) %>% 
+  mutate(group = as.factor(group)) %>% 
+  mutate(group = as.numeric(group)) %>% 
+  mutate(date = as.factor(date)) %>% 
+  mutate(date = as.numeric(date)) %>% 
+  dplyr::select(gender, group, date, age, social_metric, time_since_signup, demographic, hours_watched)
+
+M = cor(number_before)
+corrplot(M, method = "number")
+
+number_treat <- after_group_b %>% 
+  mutate(gender = as.factor(gender)) %>% 
+  mutate(gender = as.numeric(gender)) %>% 
+  mutate(group = as.factor(group)) %>% 
+  mutate(group = as.numeric(group)) %>% 
+  mutate(date = as.factor(date)) %>% 
+  mutate(date = as.numeric(date)) %>% 
+  dplyr::select(gender, group, date, age, social_metric, time_since_signup, demographic, hours_watched)
+
+M = cor(number_treat)
+corrplot(M, method = "number")
+```
+The above correlation matrix is showing that the 2nd closest correlation is demographic not surprising as it in strongly influenced by age at a 0.76 score. multicollinearity I predict to be an issue by adding it but lets see. 
+
+```{r}
+reg_model_2 <- lm(hours_watched ~ social_metric + age + demographic, data = stream_data)
+summary(reg_model_2)
+```
+indeed the p.value for demographic is 0.789 and is not adding anything the first model should be the one used. 
+
+
+# regression analysis
+The most accurate score is returned when looking at the treated group only. It is important to note that the gender is biased and would effect any predictions. and with that knowledge and current test it would be better to base any regession predictions on the larger subset of the groups collective. Importantly by subsetting this amount we have improved regression analysis by 5%. 
+
+Further accuracy increases will be possible with a better A/B test. 
+
+```{r}
+reg_model_after <- lm(hours_watched ~ social_metric + age + group, data = after)
+summary(reg_model_after)
+
+reg_model_treat <- lm(hours_watched ~ social_metric + age, data = after_group_b)
+summary(reg_model_treat)
+```
+
+no pattern in residuals is perfect 
+
+```{r residual check}
+after_group_b$model <- reg_model_treat$coefficients[1] + 
+                       reg_model_treat$coefficients[2]*after_group_b$social_metric +
+                       reg_model_treat$coefficients[3]*after_group_b$age 
+
+
+after_group_b$residual <- after_group_b$hours_watched - after_group_b$model
+
+qplot(after_group_b$social_metric,after_group_b$residual)
+qplot(after_group_b$age,after_group_b$residual)
+
+```
+
+
+# SLR plots 
+A simple linear regression visualisation shows the trend in highest correlated values. However I am not able to plot the line for the age variable because it is a negative correlation and that hasn't been taught.
+```{r}
+lin_model_after <- lm(hours_watched ~ group, data = after)
+summary(lin_model_after)
+
+
+
+lin_model_after_b <- lm(hours_watched ~ social_metric, data = after_group_b)
+summary(lin_model_after_b)
+
+qplot(after_group_b$hours_watched, after_group_b$social_metric)
+
+a0 <- coef(lin_model_after_b)[1]
+a1 <- coef(lin_model_after_b)[2]
+
+x_slr <- seq(min(after_group_b$social_metric), max(after_group_b$social_metric), 1)
+x_slr
+
+y_slr <- a0 + a1 * x_slr
+y_slr
+
+gg <- ggplot()
+gg <- gg + geom_point(aes(after_group_b$hours_watched, y = after_group_b$social_metric))
+gg <- gg + geom_line(aes(x = x_slr, y = y_slr), colour = 'red')
+gg <- gg + labs(x = 'Hours Watched', y = 'Social Metric')
+gg
+
+lin_model_after_b2 <- lm(hours_watched ~ age, data = after_group_b)
+summary(lin_model_after_b2)
+
+qplot(after_group_b$age, after_group_b$hours_watched)
+
+a0 <- coef(lin_model_after_b2)[1]
+a1 <- coef(lin_model_after_b2)[2]
+
+x2_slr <- seq(min(after_group_b$age), max(after_group_b$age), 1)
+x2_slr
+
+y2_slr <- a0 + a1 * x2_slr
+y2_slr
+
+gg <- ggplot()
+gg <- gg + geom_point(aes(after_group_b$hours_watched, y = after_group_b$age))
+gg <- gg + geom_line(aes(x = x2_slr, y = y2_slr), colour = 'red')
+gg <- gg + labs(x = 'Hours Watched', y = 'Age')
+gg
+
+```
+
+# create a better A/B test 
+determine the right sample size 
+
+I am going to split the selection between the demographic clusters and because there was a clear bias against women, gender needs to be equally represented thia time. 
+
+with a 5% effect size like in the example the sig level needs to be adjusted as well as the power. 
+
+```{r}
+alpha <- 0.05
+sigma <- pop_sd
+E <- 0.05 #high success rate MoE is very low 
+z <- qnorm(alpha/2, lower.tail = FALSE) # z-score -//based on demographic which are normally distributed 
+
+young_female <- stream_data %>% 
+  filter(demographic == "1") %>%  
+  nrow()
+young_male <- stream_data %>% 
+  filter(demographic == "2") %>% 
+  nrow()
+old_female <- stream_data %>% 
+  filter(demographic == "3") %>% 
+  nrow()
+old_male <- stream_data %>% 
+  filter(demographic == "4") %>% 
+  nrow()
+
+sample_calc_df <- data.frame(young_female, young_male, old_female, old_male)
+
+sample_calc_df %<>% pivot_longer(cols = 1:4,
+                                 values_to = "count")
+
+samp_size <- function(z, E, sigma) {  
+  out <- ((z * sigma) / E)^2  
+  out 
+} 
+
+n <- samp_size(z, E, sigma)
+
+n <- ceiling(n)
+print(n)
+
+```
+
+```{r}
+sample_calc_df %<>% mutate(proportion = count/sum(count)) 
+
+min_prop <- sample_calc_df %>% 
+  filter(proportion == min(proportion)) %>%
+  pull(proportion)
+
+n_tot <- n/min_prop
+
+sample_calc_df %<>% mutate(sample = ceiling(proportion * n_tot)) 
+revised_n_tot <- sum(sample_calc_df$sample)
+
+cat(paste0("Total collective data needed to return results with a 5% Margin of Error: ", revised_n_tot))
+```
+I am not sure that the below is correct, don't know how to work out the proportion sizes but the below figure checks out with the above. 
+```{r}
+p_2 <- 0.216 + 0.268 #younder demo
+p_1 <- 0.213 + 0.303 #older demo
+alpha <- 0.0125
+output <- pwr.p.test(h = ES.h(p1 = p_1, p2 = p_2),n = ,sig.level = alpha,
+                   power = 0.80,alternative = "greater")
+min_n <- ceiling(output[[2]])
+print(paste('Min sample size', min_n))
+```
+# end note
+The above considers the treatment group stat changes to the proportion and SD to gain the clearest idea of a sample size I need to collect all the information of the control subjects.
+
+```{r}
+total_control <- stream_data %>% 
+  filter(group == "A")
+
+alpha <- 0.05
+sigma <- sd(total_control$hours_watched)
+E <- 0.05 #high success rate MoE is very low 2.5% allowed either side
+z <- qnorm(alpha/2, lower.tail = FALSE)
+
+young_female_cont <- total_control %>% 
+  filter(demographic == "1") %>%  
+  nrow()
+young_male_cont <- total_control %>% 
+  filter(demographic == "2") %>% 
+  nrow()
+old_female_cont <- total_control %>% 
+  filter(demographic == "3") %>% 
+  nrow()
+old_male_cont <- total_control %>% 
+  filter(demographic == "4") %>% 
+  nrow()
+
+cont_calc_df <- data.frame(young_female_cont, young_male_cont, old_female_cont, old_male_cont)
+
+cont_calc_df %<>% pivot_longer(cols = 1:4,
+                                 values_to = "count")
+
+
+samp_size <- function(z, E, sigma) {  
+  out <- ((z * sigma) / E)^2  
+  out 
+} 
+
+n_cont <- samp_size(z, E, sigma)
+
+n_cont <- ceiling(n)
+print(n)
+```
+
+```{r}
+cont_calc_df %<>% mutate(proportion = count/sum(count)) 
+
+min_prop_cont <- cont_calc_df %>% 
+  filter(proportion == min(proportion)) %>%
+  pull(proportion)
+
+n_tot_cont <- n_cont/min_prop_cont
+
+cont_calc_df %<>% mutate(sample = ceiling(proportion * n_tot_cont)) 
+revised_n_tot_cont <- sum(cont_calc_df$sample)
+
+cat(paste0("Total individual data needed to return results with a 5% Margin of Error: ", revised_n_tot_cont))
+```
+```{r}
+p_2 <- 0.23 + 0.27 #younger demo
+# p_1 <- 0.28 + 0.22 #older demo
+# alpha <- 0.0125
+# output <- pwr.p.test(h = ES.h(p1 = p_1, p2 = p_2),n = ,sig.level = alpha,
+#                    power = 0.80,alternative = "greater")
+# min_n <- ceiling(output[[2]])
+# print(paste('Min sample size', min_n))
+```
+The above proportions are exactly the same size and so the pwr.p.test for the control group doesn't work.  However the sampple size should be considered as it is 800 less than the entire dataset and that may translate into cost. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
