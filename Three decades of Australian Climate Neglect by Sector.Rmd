@@ -1,0 +1,498 @@
+---
+title: "Three decades of Australian Climate Neglect by Sector"
+author: Luke Whitmore
+subtitle: 
+output:
+  html_notebook: default
+---
+
+
+## Required packages 
+
+note: some were explored but not used their existence has been left for reference. 
+
+```{r}
+# install.packages("tidyverse")
+# install.packages("janitor")
+# install.packages("qqplotr")
+
+library(readr)
+library(dplyr)
+library(tidyr)
+library(janitor)
+library(magrittr)
+# library(forecast)
+library(stringr)
+library(MVN)
+library(lubridate)
+# library(qqplotr)
+
+```
+
+
+## Data 
+
+The two below data sets both belong to the Country Climate Development Report available on the World Bank repository. 
+
+https://datacatalog.worldbank.org/search/dataset/0061107/Country-Climate-And-Development-Report
+
+The bulk download includes the two sets that have been used as well as a variety of metadata specific csv files.
+
+Initial entire merge amalgamates as thus. 
+
+1. Country Code: Abbreviated codes for country (an Intersecting variable)
+2. Country Name: Names of countries (intersecting variable)
+3. Table Name: Country Name repeated // omit // 
+4. Long Name: Etended Country name where applicable // omit // 
+5. 2-alpha code: Unique two letter country code // omit // 
+6. Currency Unit: Countries currency 
+7. Special Notes: Remarks noting to certain methods of other variables (Inconsistant between categories)
+8. Region: Global Region roughly broken down by continent
+9. Income Group: Countries over all GDP growth
+10. WB-2 code: Unique two letter country code (2-aplha code duplicate)// omit // 
+11. National accounts base year: Represents normal operation of the economy 
+12. National accounts reference year: Noted when National accounts base year has been scaled to the year referenced 
+13. SNA price Valuation: System of National Accounts price valuation at either Basic (VAB) or Producer (VAP) prices
+14. Lending category: Countries lending category of three different types International Development Association (IDA), World bank for public sector borrowers of middle-income countries (IBRD) or a blend of both
+15. Other Groups: A two category variable relating to a countries financial and location (Euro are) and (HIPC) Heavily Indebted Poor Countries
+16. System of National Accounts: The year in which the countries accounting method is based on
+17. Alternative conversion factor: Years for conversion in relation to accounts, (third world specific)
+18. PPP survey year: entirely empty variable // omit // 
+19. Balance of Payments Manual in use: An accounts reference to payment balance on a two type category (BPM6)&(BPM5) with all instances of BPM5 being converted to the current updated 6 version. 
+20. External debt reporting status: A three level category referencing accounting stages (Actual, Estimate, Preliminary)
+21. System of Trade: Countries trading system of two categories Special or General
+22. Government Accounting concept: A centralised system based on government (Budget) or (Consolidation)
+23. IMF data dissemination standard: International Monetary Fund information spread, three level category enhanced-General(e-GDDS), Special (SDDS), Special standard plus (SDDS +)
+24. Latest population census: Year of last or expected Naitonal census 
+25. Latest household survey: Nation specific survey of differing types
+26. Source of most recent Income and expenditure data: Nation specific information sources of differing types
+27. Vital registration complete: Yes or no answer 
+28. Latest agricultural census: Year last completed
+29. Latest industrial data: Year last obtained
+30. Latest trade data: Year last obtained
+31. ...31: empty logical variable // omit // 
+32. Indicator Name: First critical variable of the merge 330 unique observations some critical only to specific countries.  Values range in measurements from CO2, percentages, sums of certain things among many others.  
+33. Indicator Code: Unique codes relating to the above // omit // 
+34. The remaining variables of the merged data set are yearly observations from 1960 to 2100. Most are double numeric figures others are logical. All of the latter are empty and will be //omitted // as well as the ...97 variable. 
+
+
+```{r load-dataset}
+country <- read_csv("data/CCDRcountry.csv")
+data <- read_csv("data/CCDRdata.csv")
+
+country %>% head
+data %>% head
+
+country <- country %>% 
+  rename("Country Name" = "Short Name")
+
+intersect(country %>% names(), data %>% names())
+
+full <- merge(country, data, by = c("Country Code", "Country Name"))
+
+```
+
+### Step 1 - 2 Process
+The above process after downloading the necessary CSV files into the working directory is to check the information in the R environment is correct, by scanning the opening observations with the head() function. 
+
+There is one obvious intersecting variable being country code however there is a second of a differing naming convention. The country data set "Short Name" variable is renamed to "Country Name" a more appropriate variable title and one that matches preventing a duplicate column and a reduction in total observation count. 
+
+The merge is completed with the base function merge() after the above changes rather than a join, as the join created duplicate variables with an .x and .y suffix. 
+
+------
+
+## Understand 
+
+Initial Summary of the merged data set shows that there are only three variable types. Characters, Numeric and Logical. Through understanding the data better in the last phase it has determined that there are indeed many conversion types possible, Mainly factorisation as there is a large amount of categorical data within, also value manipulation will create a more understandable data set.
+
+There are three code chunks below the first holds the initial summary, the second a work pad so to speak and the third the conversions. 
+
+```{r understanding}
+# full %>% summary
+
+full %>% str
+```
+
+```{r double check variables for clean}
+# empty variables for dropping
+# ctd <- unique(full$`PPP survey year`)
+# class(ctd)
+# ctd
+# unique(full$...31)
+# unique(full$`PPP survey year`)
+# class(full$`PPP survey year`)
+# unique(full$`1960`)
+# unique(full$`National accounts reference year`)
+# 
+# colSums(is.na(full) == 66990)
+# 
+# colnames(full)
+              
+```
+
+
+```{r conversions}
+#Un-ordered Factorisation only
+full$Region <- as.factor(full$Region)
+full$`Lending category`<-as.factor(full$`Lending category`)
+full$`Other groups`<- as.factor(full$`Other groups`)
+
+
+#Ordered Factorisation only
+full$`Income Group` <- as.factor(full$'Income Group')
+full$`Income Group` <- factor(full$'Income Group', ordered = TRUE,
+                                 labels= c("High Income", "Low Income", "Lower middle income", "Upper middle income"))
+
+full$`External debt Reporting status`<- as.factor(full$`External debt Reporting status`)
+full$`External debt Reporting status`<- factor(full$`External debt Reporting status`, ordered = TRUE,
+                                               labels =c("Preliminary","Estimate","Actual"))
+
+full$`Balance of Payments Manual in use`<- as.factor(full$`Balance of Payments Manual in use`)
+full$`Balance of Payments Manual in use`<-factor(full$`Balance of Payments Manual in use`, ordered = TRUE,
+                                                 labels = c("BPM6", "BPM5-converted to BPM6 by IMF"))
+
+
+#String simplification and ordered factorisation
+
+#General Trade Variable
+full$`System of trade` <-  str_replace_all(full$`System of trade`, pattern = "General trade system", replacement = "General")
+full$`System of trade` <- str_replace_all(full$`System of trade`, "Special trade system", "Special")
+full$`System of trade`<- as.factor(full$`System of trade`)
+full$`System of trade` <- factor(full$`System of trade`, ordered = TRUE,
+                                 labels = c("General", "Special"))
+
+#Government Accounting conceot variable
+full$`Government Accounting concept` <- str_replace_all(full$`Government Accounting concept`, "Consolidated central government", "Central Consolidation")
+full$`Government Accounting concept` <- str_replace_all(full$`Government Accounting concept`, "Budgetary central government", "Central Budgetary")
+full$`Government Accounting concept` <- as.factor(full$`Government Accounting concept`)
+full$`Government Accounting concept`<- factor(full$`Government Accounting concept`, ordered = TRUE,
+                                              labels = c("Central Budgetary", "Central Consolidation"))
+
+#SNA Price valuation variable 
+full$`SNA price valuation` <- str_replace_all(full$`SNA price valuation`, "Value added at basic prices (VAB)", "BASIC (VAB)")
+full$`SNA price valuation` <- str_replace_all(full$`SNA price valuation`, "Value added at producer prices (VAP)", "PRODUCER (VAP)")
+full$`SNA price valuation` <- as.factor(full$`SNA price valuation`)
+full$`SNA price valuation` <- factor(full$`SNA price valuation`, ordered = TRUE)
+
+#IMF data dissemination standard
+full$`IMF data dissemination standard`<-str_replace_all(full$`IMF data dissemination standard`, "Enhanced General Data Dissemination System (e-GDDS)", "Enhanced General (e-GDDS)")
+full$`IMF data dissemination standard`<-str_replace_all(full$`IMF data dissemination standard`, "Special Data Dissemination Standard (SDDS)", "Special (SDDS)")
+full$`IMF data dissemination standard`<-str_replace_all(full$`IMF data dissemination standard`, "Special Data Dissemination Standard Plus (SDDS Plus)", "Special Standard plus (SDDS plus)")
+full$`IMF data dissemination standard`<- as.factor(full$'IMF data dissemination standard')
+full$`IMF data dissemination standard`<- factor(full$'IMF data dissemination standard', ordered = TRUE,
+                                                labels = c("e-GDDS", "SDDS", "SDDS +"))
+
+# Variable rename for coherence after(but as it reads executed before) string simplification 
+full <- full %>% 
+  rename("Methodology year of National Accounting" = "System of National Accounts")
+full$`Methodology year of National Accounting`<- str_replace_all(full$`Methodology year of National Accounting`, "Country uses the 1993 System of National Accounts methodology", "1993")
+full$`Methodology year of National Accounting`<- str_replace_all(full$`Methodology year of National Accounting`, "Country uses the 2008 System of National Accounts methodology", "2008")
+full$`Methodology year of National Accounting`<- str_replace_all(full$`Methodology year of National Accounting`, "Country uses the 1968 System of National Accounts methodology", "1968")
+full$`Methodology year of National Accounting`<-as.factor(full$`Methodology year of National Accounting`)
+full$`Methodology year of National Accounting`<-factor(full$`Methodology year of National Accounting`, ordered = TRUE,
+                                          labels = c("1968", "1993", "2008"))
+
+#date conversions to numeric because this is best.  A four digit year indicator is not a Date.  However within some of the date columns there is other important information that may apply to certain cases.  
+
+# full$`National accounts base year`<-as.numeric(full$`National accounts base year`) this should not be done as there is other information in this column that is not just numbers.  Same rule applies to latest agricultural census. 
+
+#convert to character from logical to drop with the rest of full NA cols
+full$`PPP survey year`<-as.character(full$`PPP survey year`)
+
+#dropping columns with all NA values using the dplyr package
+full <- full %>% 
+  select_if(~!all(is.na(.)))
+
+#dropping variables that are redundant by subsetting
+cleaned <- full[,c(1:2, 6:9, 11:30, 32:103)]
+
+# cleaned %>% str
+# colnames(cleaned)
+
+# setdiff(full %>% names(), cleaned %>% names())
+
+```
+
+
+### Step 3:5 Process
+
+From overlooking the structure and content of the data, there are a lot of categorical variables of character value that need converting to factors.  Some of which were a simple conversion defaulting to an alphabetical order and others benefited from ordering, for logical reasons. This was achieved by as.factor() base function and where applicable the ordered = TRUE argument instated and lables were given.
+
+As well as converting it made sense in some instances to apply certain manipulations to save confusion later. Specific factors values were changed through the use of the stringr function str_replace_all() simplifying values for a more interpretable table. In one instance for the simplification to make sense the variable needed to be renamed with the dyplr function rename(). 
+
+There is no column within this data set that is specifically a 'DATE', some of what one would think are the date variables have other information pertaining to certain situations and may be deemed important in certain cases and such they remain un altered. In the purely four digit numeric columns indicating the year date there was a desire to convert this figure to a date but unfortunately those figures are not defined as a date without the corresponding month and day information.  When converted to a date it automatically fills in the missing information with the first day and month of that year which could lead to misinformation and as such is also un altered. 
+
+Looking forward the 'PPP survey year' is of the logical class and is also an empty NA variable. Converting it to a character type will allow for the column drop that follows because a logical NA is not recognised by the below solution. 
+
+Before the tidy the dropping of completely empty variables is necessary to prevent an expansion of redundant observations. The dpylr function select_if is used with the arguments do not select all if the data within the column is all NA. The full stop indicates the encompassing data. 
+
+Further to this analysis there are a number of redundant or duplicate variables that are not important and a subset excluding them is created. 
+
+##	Tidy & Manipulate Data I 
+
+```{r}
+cleaned <-pivot_longer(data = cleaned, 
+               names_to = "Year", 
+               values_to = "Value", 
+               cols = 27:98)
+# cleaned %>% str
+cleaned %>%
+  select(`Indicator Name`, Year, Value) %>% 
+  head(10)
+
+```
+
+### Step 6 process 
+
+Despite earlier manipulations and subsets the data does not conform to tidy principles yet. The last columns of the merge are all observation values within a year category and a long pivot is required. The 'Value' variable is important with and without information because as key as input data is the lack of it in this instance is also an important indicator. 
+
+The tidyr pivot_longer() function was used. 
+
+This is still not a tidy data set as 'Indicator Name' is in fact a variable full of 330 unique values. It could be pivoted here but the process of using this information was specific and to prevent creating more confusion by adding 330 more variables, it was decided against.   
+
+##	Tidy & Manipulate Data II 
+
+
+```{r}
+cleaned %<>%
+  group_by(`Indicator Name`) %>% 
+  mutate('Indicator Mean Value' = mean(Value, na.rm = TRUE))
+
+impact<- cleaned %>% 
+  filter(!is.na(Value))
+
+noimpact<- cleaned %>%
+  filter(is.na(Value))
+
+impact %>% 
+  select(Year, Value, `Indicator Mean Value`) %>% 
+  tail
+
+
+```
+
+### Step 7 process
+
+There are not many numeric variables in this data and enough categorical and descriptive variables already that the only useful manipulation that hasn't been done is to create a mean column of the values that have been tidied already. 
+
+dyplr mutate() function used group by the indicator name. 
+
+This is one other reason why the wider pivot of Indicator Name has not been done yet.
+
+Importantly in this phase another subset was created where there are values within the value variable.  It was stated before that missing information is also important which remains true, however it is easier to see the countries that have done nothing by creating another subset called 'noimpact' and leave the recorded value data within another. To note there are 3 800 000 odd more observations within the no impact subset, hence why it has been narrowed. 
+
+##	Scan I 
+
+```{r}
+# colSums(is.na(impact))
+
+# there is alot of categorical data that has not been entered of which no plot or outlier method will work on. To show that I can do this I have to subset further to individual countries and remove columns that are made up of complete NA values as a result of data never available.
+
+australia <- impact %>%
+  filter(`Country Name` == "Australia")
+
+
+#australia has a total of 3494 observations, the below count shows that there are columns with either all NA values or none.
+
+# colSums(is.na(australia))
+
+australia <- australia %>% 
+  select_if(~!all(is.na(.)))
+
+# colSums(is.na(australia))
+
+# australia %>% str
+
+# unique(australia$`Indicator Name`)
+
+```
+
+### Step 8 process 
+
+The scanning for missing values within the data started at step 3-5, given that the chosen data set is particularly broad scanning and omitting NA values has been needed throughout to achieve what has been asked. 
+
+In this step a further subset has been created for Australian specific values, again there were columns that were either entirely informed or without information at all.
+
+Complete NA variables are discarded in the same fashion as Step 3-5.  In this subset there are columns either completely full of information or absolutely empty making it easy to negate those instances.  
+
+##	Scan II
+
+```{r}
+# Because "Indicator Name" is an untidy variable with many types of measurements and categories subsetting the information  will be the most specific for testing outliers. It could also be widened but that would create a lot (330) new variables and that takes away from the desired focus.  It is better to look through the indicator names and pick out what information that is actually required. 
+
+z.scores <- australia$Value %>%
+  outliers::scores(type = "z")
+#32 outliers upon checking are all related to GDP which is a very large number compared to other measurements, we need a subset
+length(which(abs(z.scores)>3))
+which(abs(z.scores)>3)
+
+enquiry <- australia[3275:3305,]
+enquiry %>%
+  select(`Indicator Name`, Year, Value) %>% 
+  tail(10)
+
+# indicator name has variables that are many different measurements, the data set was used because on an interest in CO2 readings and as such will be focused on. 
+aus_CO2 <- australia %>% 
+  filter(str_detect(`Indicator Name`, "CO2"))
+
+aus_CO2 %>% 
+  select(`Indicator Name`, Year, Value)
+
+#great all the same measurements, check for outliers of now a true univariate column 
+CO2_z.scores <- aus_CO2$Value %>%
+  outliers::scores(type = "z")
+length(which(abs(CO2_z.scores)>3))
+which(abs(CO2_z.scores)>3)
+
+#okay the outliers are totals or annual figures and hence a much larger number (not true univariate). 
+# enquiry2<-aus_CO2 %>% 
+#   select(`Indicator Name`, Value) %>% 
+#   aus_CO2[c(938,1008,1009,1018,1019,1024,1035:1038, 1040,1042,1043,1045,1047,1048,1053,1054,1141,1142),]
+
+enquiry2 %>% 
+  select(`Indicator Name`, Year, Value) %>% 
+  head(10)
+
+aus_CO2 %>% 
+  select(`Indicator Name`, Year, Value) %>% 
+  head(10)
+
+# the outliers are total or annual figures of a collective, to solve pivot wider to a smaller subset 45 extra variables
+uni_ausco2<-unique(aus_CO2$`Indicator Name`)
+length(uni_ausco2)
+
+
+#makes everything lower case and removes spaces (should have done this earlier)
+aus_CO2<- aus_CO2 %>%
+  clean_names()
+# aus_CO2 %>% colnames
+
+#untidy data shows a spread that will not conform to transformation appropriately
+hist(aus_CO2$value)
+
+#tidy again
+wide_aus<- aus_CO2 %>%
+  pivot_wider(names_from = indicator_name, values_from = value, values_fill = NA)
+# wide_aus %>% colnames
+
+
+wide_aus<- wide_aus %>%
+  clean_names()
+
+#Manufacturing
+energy_CO2_z.scores <- wide_aus$total_ghg_emissions_by_sector_mt_co2_eq_manufacturing_construction %>%
+  outliers::scores(type = "z")
+length(which(abs(energy_CO2_z.scores)>3))
+
+hist(wide_aus$total_ghg_emissions_by_sector_mt_co2_eq_manufacturing_construction,
+     main = "Emissions Manufacturing construction sector (MT CO2)",
+     xlab = "Measurements to the metric tonne as a yearly observation")
+
+wide_aus %>% 
+  plot(total_ghg_emissions_by_sector_mt_co2_eq_manufacturing_construction ~ year,
+       data = .,
+       ylab = "Emissions per Metric Tonne", xlab = "Year",
+       main = "Relationship between emissions and year for Manufactoring sector")
+
+#Agriculture
+energy_CO2_z.scores <- wide_aus$non_co2_ghg_emissions_by_sector_mt_co2_eq_agriculture %>%
+  outliers::scores(type = "z")
+length(which(abs(energy_CO2_z.scores)>3))
+
+hist(wide_aus$non_co2_ghg_emissions_by_sector_mt_co2_eq_agriculture,
+     main = "Emissions Agriculture sector (MT CO2)",
+     xlab = "Measurements to the metric tonne as a yearly observation")
+
+wide_aus %>% 
+  plot(non_co2_ghg_emissions_by_sector_mt_co2_eq_agriculture ~ year,
+       data = .,
+       ylab = "GHG Emissions per Metric Tonne", xlab = "Year",
+       main = "Relationship between Green House Gas emissions and year 
+       Agricultural sector")
+
+#Electricity & Heat
+energy_CO2_z.scores <- wide_aus$co2_emissions_by_sector_mt_co2_eq_electricity_heat %>%
+  outliers::scores(type = "z")
+length(which(abs(energy_CO2_z.scores)>3))
+
+hist(wide_aus$co2_emissions_by_sector_mt_co2_eq_electricity_heat,
+     main = "Emissions Electricity & Heat sector (MT CO2)",
+     xlab = "Measurements to the metric tonne as a yearly observation")
+
+wide_aus %>% 
+  plot(co2_emissions_by_sector_mt_co2_eq_electricity_heat ~ year,
+       data = .,
+       ylab = "Emissions per Metric Tonne", xlab = "Year",
+       main = "Relationship between emissions and year for Electricity and Heat sector")
+
+#Energy
+energy_CO2_z.scores <- wide_aus$co2_emissions_by_sector_mt_co2_eq_energy %>%
+  outliers::scores(type = "z")
+length(which(abs(energy_CO2_z.scores)>3))
+
+hist(wide_aus$co2_emissions_by_sector_mt_co2_eq_energy,
+     main = "Emissions Energy sector (MT CO2)",
+     xlab = "Measurements to the metric tonne as a yearly observation")
+
+
+plot_energy <- wide_aus %>% 
+  plot(co2_emissions_by_sector_mt_co2_eq_energy ~ year,
+       data = .,
+       ylab = "Emissions per Metric Tonne", xlab = "Year",
+       main = "Relationship between emissions and year for Energy sector")
+
+save(plot_energy, file = "output/plot_energy.jpeg")
+
+```
+
+### Step 9 process 
+
+In this phase given that the Indicator Name variable has not been dealt with properly yet, as the process was being worked the outcomes until the resolve shows what can happen when the data is still untidy. A reminder that it has been worked this way as the information ultimately has a focus in mind. 
+
+The z.score method was used and provides outliers as a count.  Even though the subset is only country specific at the beginning of this phase there are still many different measurements within the 'Indicator Name' column.  This is why there are initial outliers evident. These being the figures relating to GDP which of course are exponentially larger than other figures. 
+
+A late housekeeping note being the variable names should have been cleaned with clean_names(), a janitor package function, at the start as it makes handling them much easier. 
+
+The final tidy and wide pivot is executed, as the number of extra variables will only amount to 45 making a much more manageable data set, finally this is ultimately now cleaned.
+Four different columns were used to check for outliers of which none were evident. A univariate and bivariate plot were created, the former to visualise skewness, for the next task, and the latter to look for outliers in relation to the year variable, which are closely linked.
+
+There are no outliers and the data is now truly tidy, in this smaller subset. 
+
+Clearly the order of what has been done above can be changed and the 'impact' can be referenced on a global scale rather than only nationally. However as unconventional as this process may have been it is how the tasks were achieved with a developing comprehension and within the structure of this template. 
+
+
+##	Transform 
+
+
+```{r}
+# now to transform the energy sector as it is left skewed. 
+#left skew transformations are squares, cubes or higher powers. 
+
+powertrans_aus_energy <- wide_aus %>% 
+  select(co2_emissions_by_sector_mt_co2_eq_energy)
+
+
+sqr_powertrans <- powertrans_aus_energy$co2_emissions_by_sector_mt_co2_eq_energy^7
+
+
+hist(sqr_powertrans,
+     main = "Transformation to the power of 7",
+     xlab = "Power of 7 metric tonne measurement as a yearly observation",
+     # breaks = 10,
+     col = "light blue")
+
+```
+
+## Step 10 process 
+
+Of the four variables that were plotted in the previous step 'co2_emissions_by_sector_mt_co2_eq_energy' was the one with the most significant skew. Being a left skewed variable the squared power transformation is required.  At a power of of 7 it brings the values to a more even distribution. however when binned to a greater number there are gaps in the data, this is because there just isn't really that much information to be transforming.  This practice would be more effective if say the data had not been narrowed so much.
+
+
+# Conclusion 
+
+This is a very useful dataset and can be used to far greater effect than what I have displayed here if a countries CO2 emissions are compared with one another. Australia of which has a notoriously bad reputation with its own populous let alone abroad could use this data of the last thirty years and see what a more forward thinking nation had done earlier to curb emissions. Scrape that budget and policy data and try to apply it to the home market. 
+Speaking further of governance one narrative that sticks out to me when analysing the Emissions by Energy sector is the peak of emissions roughly around 2009, two years after the Howard government policies were last instated. Then the following decline thanks to Rudd and Gillard of which was very astutely undone by the ever shifting coalition that followed.
+This is a baseline study and further insight could be gathered when comparing performance and waste of the energy sector and how to minimise this countries global warming contributions without damaging the economy. 
+
+<br>
+<br>
