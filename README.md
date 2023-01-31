@@ -24,6 +24,10 @@ An example of using R and Python for data analysis and problem solving.
 ![](https://github.com/Whittlessness/R-warehouse/blob/main/correlation%20matrix.jpg)
 
 ## Project #3: Python Analysis and ML model build
-* 
-*
-*
+* Source a supervised dataset 
+* Use Pandas, numpy, matplotlib, seaborn & scikitlearn packages 
+* Visualise scatter matrix for variable relationship determination 
+* Encoding caregorical variables for model fitting
+* Test and train with both KNN and DT models to determine the most efficient
+
+
