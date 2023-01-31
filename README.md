@@ -30,6 +30,6 @@ An example of using R and Python for data analysis and problem solving.
 * Encoding caregorical variables for model fitting
 * Test and train with both KNN and DT models to determine the most efficient
 
-**The below is the result of the Decision tree Model which was slightly more accurate with predicting the minorities within the data**
+**The below is the result of the Decision tree Model which was slightly more accurate when predicting the minorities within the data**
 
 ![](https://github.com/Whittlessness/Warehouse/blob/main/images/DT%20classification%20report%20.jpg)
