@@ -30,4 +30,4 @@ An example of using R and Python for data analysis and problem solving.
 * Encoding caregorical variables for model fitting
 * Test and train with both KNN and DT models to determine the most efficient
 
-
+![](https://github.com/Whittlessness/Warehouse/blob/main/images/DT%20classification%20report%20.jpg)
