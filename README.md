@@ -22,3 +22,8 @@ An example of using R and Python for data analysis and problem solving.
 * Conclude on results, affirm on the theory and recommend improving the process by reducing the Margin of Error. 
 
 ![](https://github.com/Whittlessness/R-warehouse/blob/main/correlation%20matrix.jpg)
+
+## Project #3: Python Analysis and ML model build
+* 
+*
+*
