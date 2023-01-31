@@ -1,5 +1,8 @@
 # Data Science Portfolio
-An example of using R and Python for data analysis and problem solving. 
+Hi my name is Luke,
+
+I believe that the secret to rectifying our errors and creating a better future is within the data the world creates everyday. I aspire to contribute to this revolution, and believe that there is a lot of good business to be done within this new world.
+Below are a few projects showcasing coding within R and Python, I also am familar with SQL and dataframe management. 
 
 ## [Project #1: Three decades of Australian Climate Neglect by Sector](https://github.com/Whittlessness/R-warehouse/blob/main/Three%20decades%20of%20Australian%20Climate%20Neglect%20by%20Sector.Rmd)
 * Sourced a public global database on CO2 emissions per sector for every country in the world with available data. 
