@@ -29,6 +29,7 @@ An example of using R and Python for data analysis and problem solving.
 * Visualise scatter matrix for variable relationship determination 
 * Encoding caregorical variables for model fitting
 * Test and train with both KNN and DT models to determine the most efficient
+
 ..* the below is the result of the Decision tree Model which was slightly more accurate with predicting the minorities within the data
 
 ![](https://github.com/Whittlessness/Warehouse/blob/main/images/DT%20classification%20report%20.jpg)
